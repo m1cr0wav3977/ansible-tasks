@@ -1,0 +1,16 @@
+server_url: "{{ graylog_server_url }}"
+server_api_token: "{{ graylog_server_api_token }}"
+update_interval: 10
+send_status: true
+log_path: "/var/log/graylog-sidecar"
+log_rotate_max_file_size: "10MiB"
+log_rotate_keep_files: 10
+tags:
+  - catamountcyber
+{% for tag in sidecar_tags | default([]) %}
+  - {{ tag }}
+{% endfor %}
+collector_binaries_accesslist:
+  - "/usr/bin/metricbeat"
+  - "/usr/lib/graylog-sidecar/filebeat"
+  - "/usr/lib/graylog-sidecar/auditbeat"

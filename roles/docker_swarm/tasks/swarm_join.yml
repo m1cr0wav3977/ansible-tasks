@@ -1,0 +1,154 @@
+---
+- name: determine swarm status for managers
+  shell: >
+    docker info 2>/dev/null | grep Swarm | awk '{print $2}'
+  register: swarm_status
+  when: group_names | select('match', '.*_Manager') | list | length > 0
+  changed_when: false
+
+- name: Debug swarm status for managers
+  debug:
+    msg: "Host: {{ inventory_hostname }}, Swarm Status: {{ swarm_status.stdout }}"
+  when: group_names | select('match', '.*_Manager') | list | length > 0
+
+- name: create swarm_manager_bootstrap group
+  add_host:
+    hostname: "{{ item }}"
+    groups: "{{ swarm_name }}_manager_bootstrap"
+  with_items: "{{ play_hosts }}"
+  when: 
+    - hostvars[item].swarm_status.stdout is defined
+    - hostvars[item].swarm_status.stdout == 'inactive' 
+    - group_names | select('match', '.*_Manager') | list | length > 0
+
+- name: Debug "{{ swarm_name }}_manager_bootstrap" group length
+  debug:
+    msg: "Length of {{ swarm_name }}_manager_bootstrap: {{ groups[swarm_name ~ '_manager_bootstrap'] | length }}"
+  when: "'{{ swarm_name }}_manager_bootstrap' in groups"
+
+- name: create swarm_manager_operational group
+  add_host:
+    hostname: "{{ item }}"
+    groups: "{{ swarm_name }}_manager_operational"
+  with_items: "{{ play_hosts }}"
+  when: 
+    - hostvars[item].swarm_status.stdout is defined
+    - hostvars[item].swarm_status.stdout == 'active'  
+    - group_names | select('match', '.*_Manager') | list | length > 0
+
+- name: Debug "{{ swarm_name }}_manager_operational" group length
+  debug:
+    msg: "Length of {{ swarm_name }}_manager_operational: {{ groups[swarm_name ~ '_manager_operational'] | length }}"
+  when: "'{{ swarm_name }}_manager_operational' in groups"
+
+- name: determine swarm status for workers
+  shell: >
+    docker info 2>/dev/null | grep Swarm | awk '{print $2}'
+  register: swarm_status
+  when: group_names | select('match', '.*_Swarm') | list | length > 0
+  changed_when: false
+
+- name: Debug swarm status for workers
+  debug:
+    msg: "Host: {{ inventory_hostname }}, Swarm Status: {{ swarm_status.stdout }}"
+  when: group_names | select('match', '.*_Swarm') | list | length > 0
+
+- name: create swarm_worker_bootstrap group
+  add_host:
+    hostname: "{{ item }}"
+    groups: "{{ swarm_name }}_worker_bootstrap"
+  with_items: "{{ play_hosts }}"
+  when: 
+    - hostvars[item].swarm_status.stdout is defined
+    - hostvars[item].swarm_status.stdout == 'inactive'
+    - group_names | select('match', '.*_Swarm') | list | length > 0
+
+- name: Debug "{{ swarm_name }}_worker_bootstrap" group length
+  debug:
+    msg: "Length of {{ swarm_name }}_worker_bootstrap: {{ groups[swarm_name ~ '_worker_bootstrap'] | length }}"
+  when: "'{{ swarm_name }}_worker_bootstrap' in groups"
+
+- name: create swarm_worker_operational group
+  add_host:
+    hostname: "{{ item }}"
+    groups: "{{ swarm_name }}_worker_operational"
+  with_items: "{{ play_hosts }}"
+  when: 
+    - hostvars[item].swarm_status.stdout is defined
+    - hostvars[item].swarm_status.stdout == 'active'
+    - group_names | select('match', '.*_Swarm') | list | length > 0
+
+- name: Debug "{{ swarm_name }}_worker_operational" group length
+  debug:
+    msg: "Length of {{ swarm_name }}_worker_operational: {{ groups[swarm_name ~ '_worker_operational'] | length }}"
+  when: "'{{ swarm_name }}_worker_operational' in groups"
+
+- name: initialize swarm cluster
+  shell: >
+    docker swarm init
+    --advertise-addr={{ ansible_host }}:2377
+  when: 
+    - "inventory_hostname == groups['{{ swarm_name }}_manager_bootstrap'][0]"
+    - "groups['{{ swarm_name }}_manager_bootstrap'] | length == play_hosts | length"
+  register: bootstrap_first_node
+  ignore_errors: true
+
+- name: add initialized host to swarm_manager_operational group
+  add_host:
+    hostname: "{{ inventory_hostname }}"
+    groups: "{{ swarm_name }}_manager_operational"
+  when: 
+    - bootstrap_first_node is changed
+    - "inventory_hostname == groups['{{ swarm_name }}_manager_bootstrap'][0]"
+
+# Retrieve the join tokens
+- name: retrieve swarm manager token
+  shell: docker swarm join-token -q manager
+  register: swarm_manager_token
+  when: 
+#    - "'{{ swarm_name }}_manager_operational' in group_names"
+    - "inventory_hostname == groups['{{ swarm_name }}_manager_operational'][0]"
+
+- name: retrieve swarm worker token
+  shell: docker swarm join-token -q worker
+  register: swarm_worker_token
+  when: 
+#    - "'{{ swarm_name }}_manager_operational' in group_names"
+    - "inventory_hostname == groups['{{ swarm_name }}_manager_operational'][0]"
+
+- name: Set swarm manager bootstrap group
+  set_fact:
+    swarm_manager_bootstrap_group: "{{ groups[swarm_name + '_manager_bootstrap'] }}"
+  ignore_errors: true
+
+- name: Set swarm worker bootstrap group
+  set_fact:
+    swarm_worker_bootstrap_group: "{{ groups[swarm_name + '_worker_bootstrap'] }}"
+  ignore_errors: true
+
+- name: Set swarm manager operational group
+  set_fact:
+    swarm_manager_operational_group: "{{ groups[swarm_name + '_manager_operational'] }}"
+  ignore_errors: true
+
+- name: Set swarm manager token
+  set_fact:
+    swarm_manager_token: "{{ hostvars[groups[swarm_name + '_manager_operational'][0]]['swarm_manager_token']['stdout'] }}"
+  ignore_errors: true
+
+- name: Debug group membership and variables
+  debug:
+    msg:
+      - "swarm_manager_bootstrap_group: {{ swarm_manager_bootstrap_group }}"
+      - "group_names: {{ group_names }}"
+  ignore_errors: true
+
+- name: join manager nodes to cluster
+  shell: "docker swarm join --advertise-addr={{ ansible_host }}:2377 --token={{ swarm_manager_token }} {{ swarm_manager_operational_group[0] }}:2377"
+  ignore_errors: true
+  when: inventory_hostname in swarm_manager_bootstrap_group
+
+- name: join worker nodes to cluster
+  shell: "docker swarm join --advertise-addr={{ ansible_host }}:2377 --token={{ swarm_manager_token }} {{ swarm_manager_operational_group[0] }}:2377"
+  ignore_errors: true
+  when: inventory_hostname in swarm_worker_bootstrap_group

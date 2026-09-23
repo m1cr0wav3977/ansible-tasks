@@ -1,0 +1,56 @@
+---
+- name: install apt packages
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - python3-pip
+    - python3-venv
+    - python3-dev
+    - ca-certificates
+    - curl
+
+- name: Create keyrings directory for Docker
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Install Docker GPG key if missing
+  ansible.builtin.command:
+    cmd: >
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg
+      -o /etc/apt/keyrings/docker.asc
+    creates: /etc/apt/keyrings/docker.asc
+
+- name: Set facts for Docker apt architecture and codename
+  set_fact:
+    docker_arch: "{{ ansible_architecture == 'x86_64' and 'amd64' or ansible_architecture }}"
+    ubuntu_codename: "{{ ansible_lsb.codename }}"
+
+- name: Add Docker APT repository using official signed-by method
+  copy:
+    dest: /etc/apt/sources.list.d/docker.list
+    content: |
+      deb [arch={{ docker_arch }} signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ubuntu_codename }} stable
+    mode: '0644'
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Install Docker packages (official set)
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+
+- name: Install Docker Module for Python
+  pip:
+    name: ["docker", "jsondiff"]
+    extra_args: "--break-system-packages"
+  ignore_errors: true

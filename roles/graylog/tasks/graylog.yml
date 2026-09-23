@@ -1,0 +1,83 @@
+---
+- name: Require a Graylog Sidecar API token
+  ansible.builtin.assert:
+    that:
+      - graylog_server_api_token is defined
+      - graylog_server_api_token | length > 0
+      - graylog_server_url is defined
+      - graylog_server_url | length > 0
+      - graylog_logstash_host is defined
+      - graylog_logstash_host | length > 0
+    fail_msg: Set Graylog variables in encrypted inventory or group variables.
+  no_log: true
+
+- name: Check if graylog-sidecar is installed
+  command: graylog-sidecar -version
+  register: graylog_installed
+  changed_when: false
+  ignore_errors: true
+
+- name: Debug version check
+  debug:
+    var: graylog_installed
+
+- name: install graylog-sidecar
+  ansible.builtin.apt:
+    deb: https://github.com/Graylog2/collector-sidecar/releases/download/1.5.1/graylog-sidecar_1.5.1-1_amd64.deb
+  when: graylog_installed.failed or graylog_installed.rc != 0
+
+- name: install the graylog-sidecar service
+  shell: |
+    graylog-sidecar -service install
+  when: graylog_installed.failed or graylog_installed.rc != 0
+
+- name: template in the sidecar conf
+  template:
+    src: sidecar.yml.j2
+    dest: /etc/graylog/sidecar/sidecar.yml
+    mode: 0644
+  vars:
+      tag: "{{ config_tags }}"
+
+- name: start the graylog-sidecar
+  shell: |
+    graylog-sidecar -service start
+  when: graylog_installed.failed or graylog_installed.rc != 0
+
+# metricbeat config - get the hostname and node-id after init to complete metricbeat config then restart for it to take effect
+# wacky I know but graylog will not allow you to set the metricbeat conf to the one pulled from the graylog server in /var/lib/graylog/generated
+# so ya wacky
+#
+- name: Check if metricbeat is installed
+  command: metricbeat version
+  register: metricbeat_installed
+  changed_when: false
+  ignore_errors: true
+
+- name: install metricbeat
+  ansible.builtin.apt:
+    deb: https://artifacts.elastic.co/downloads/beats/metricbeat/metricbeat-9.0.0-amd64.deb
+  when: metricbeat_installed.failed or metricbeat_installed.rc != 0
+
+- name: get the hostname
+  shell: |
+    hostname
+  register: host_name
+
+- name: get the node-id
+  shell: |
+    cat /etc/graylog/sidecar/node-id
+  register: node_id
+
+- name: template in the metricbeat.yml
+  template:
+    src: metricbeat.yml.j2
+    dest: /etc/metricbeat/metricbeat.yml
+    mode: 0644
+  vars:
+    host_name: "{{ host_name.stdout }}"
+    node_id: "{{ node_id.stdout }}"
+
+- name: restart the graylog-sidecar if it is installed
+  shell: |
+    graylog-sidecar -service restart

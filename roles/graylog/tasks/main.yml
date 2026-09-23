@@ -1,0 +1,3 @@
+---
+- import_tasks: graylog.yml
+- import_tasks: metricbeat.yml

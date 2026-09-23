@@ -1,0 +1,65 @@
+# Obtain certificates from Let's Encrypt
+- name: Validate Let's Encrypt email
+  ansible.builtin.assert:
+    that:
+      - ssl_letsencrypt_email | length > 0
+    fail_msg: "ssl_letsencrypt_email is required for Let's Encrypt certificate requests."
+
+- name: Create webroot directory for HTTP validation
+  ansible.builtin.file:
+    path: "{{ item.webroot | default(ssl_letsencrypt_webroot) }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+  loop: "{{ ssl_domains }}"
+  when: ssl_letsencrypt_method == "webroot"
+
+- name: Check existing certificates
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ item.domain }}/fullchain.pem"
+  loop: "{{ ssl_domains }}"
+  register: existing_certs
+
+- name: Obtain certificates via HTTP challenge
+  ansible.builtin.command:
+    cmd: >
+      certbot certonly
+      --non-interactive
+      --agree-tos
+      --email {{ ssl_letsencrypt_email }}
+      {% if ssl_letsencrypt_staging %}--staging{% endif %}
+      --webroot
+      --webroot-path {{ item.item.webroot | default(ssl_letsencrypt_webroot) }}
+      -d {{ item.item.domain }}
+      {% if item.item.aliases is defined %}
+      {% for alias in item.item.aliases %}
+      -d {{ alias }}
+      {% endfor %}
+      {% endif %}
+  loop: "{{ existing_certs.results }}"
+  when:
+    - ssl_letsencrypt_method == "webroot"
+    - not item.stat.exists
+#  notify: reload web server
+
+- name: Obtain certificates via standalone mode
+  ansible.builtin.command:
+    cmd: >
+      certbot certonly
+      --non-interactive
+      --agree-tos
+      --email {{ ssl_letsencrypt_email }}
+      {% if ssl_letsencrypt_staging %}--staging{% endif %}
+      --standalone
+      -d {{ item.item.domain }}
+      {% if item.item.aliases is defined %}
+      {% for alias in item.item.aliases %}
+      -d {{ alias }}
+      {% endfor %}
+      {% endif %}
+  loop: "{{ existing_certs.results }}"
+  when:
+    - ssl_letsencrypt_method == "standalone"
+    - not item.stat.exists
+#  notify: reload web server

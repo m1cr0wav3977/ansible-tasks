@@ -1,0 +1,6 @@
+wazuh_manager: "{{ wazuh_manager_host }}"
+wazuh_agent_group: "default"
+wazuh_agent_name: "agent"
+#wazuh_agent_version: "4.13.1-1" in vars/main.yml
+wazuh_agent_deb: "wazuh-agent_{{ wazuh_agent_version }}_amd64.deb"
+wazuh_agent_url: "https://packages.wazuh.com/4.x/apt/pool/main/w/wazuh-agent/{{ wazuh_agent_deb }}"

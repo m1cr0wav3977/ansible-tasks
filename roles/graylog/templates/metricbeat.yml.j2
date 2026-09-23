@@ -1,0 +1,39 @@
+# Send fields as top-level keys (not nested under "fields")
+fields_under_root: true
+
+# Static custom fields for identification in Graylog
+fields:
+  collector_node_id: {{ host_name }}
+  gl2_source_collector: {{ node_id }}
+  source: "metricbeat"
+  type: "system_metrics"
+
+# Module loading configuration (external per-file module configs)
+metricbeat.config.modules:
+  path: /etc/metricbeat/modules.d/*.yml
+  reload.enabled: false
+  reload.period: 10s
+
+# Output: send to Graylog using Logstash-compatible input
+output.logstash:
+  enabled: true
+  hosts: ["{{ graylog_logstash_host }}"]
+  ssl.enabled: false
+  codec.json:
+    pretty: false
+
+# Optional: reduce log level (you can set to debug for troubleshooting)
+logging:
+  level: info
+  to_files: true
+  files:
+    path: /var/log/metricbeat
+    name: metricbeat
+    keepfiles: 7
+    permissions: 0644
+
+# Optional: queue tuning
+queue.mem:
+  events: 4096
+  flush.min_events: 0
+  flush.timeout: 1s

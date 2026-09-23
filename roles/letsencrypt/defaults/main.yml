@@ -1,0 +1,36 @@
+# Certificate provider: letsencrypt or selfsigned
+ssl_provider: letsencrypt
+
+# Let's Encrypt settings
+ssl_letsencrypt_email: ""
+ssl_letsencrypt_staging: false
+ssl_letsencrypt_method: webroot
+ssl_letsencrypt_webroot: /var/www/letsencrypt
+
+# Certbot settings
+ssl_certbot_package: certbot
+ssl_certbot_plugin_packages: []
+
+# Domains to get certificates for
+ssl_domains: []
+# Example:
+#   - domain: example.com
+#     aliases:
+#       - www.example.com
+#     webroot: /var/www/example.com
+#   - domain: api.example.com
+
+# Self-signed certificate settings
+ssl_selfsigned_days: 365
+ssl_selfsigned_key_size: 4096
+ssl_selfsigned_country: US
+ssl_selfsigned_state: Vermont
+ssl_selfsigned_org: "Catamount Cyber"
+
+# Certificate paths
+ssl_cert_dir: /etc/letsencrypt/live
+ssl_private_key_dir: /etc/ssl/private
+
+# Renewal settings
+#ssl_renewal_service: nginx
+#ssl_renewal_hook_command: "systemctl reload {{ ssl_renewal_service }}"

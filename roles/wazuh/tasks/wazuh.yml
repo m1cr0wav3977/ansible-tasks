@@ -1,0 +1,42 @@
+---
+- name: Check if Wazuh agent is installed
+  ansible.builtin.command:
+    cmd: dpkg-query -W -f='${Status}' wazuh-agent
+  register: wazuh_agent_installed
+  changed_when: false
+  failed_when: false
+
+- name: Download and install Wazuh agent if not installed
+  when: wazuh_agent_installed.rc != 0
+  block:
+
+    - name: Download Wazuh agent package
+      ansible.builtin.command:
+        cmd: >
+          curl -fsSL "{{ wazuh_agent_url }}"
+          -o "/tmp/{{ wazuh_agent_deb }}"
+      args:
+        creates: "/tmp/{{ wazuh_agent_deb }}"
+
+    - name: Install Wazuh agent
+      ansible.builtin.command:
+        cmd: >
+          dpkg -i /tmp/{{ wazuh_agent_deb }}
+      environment:
+        WAZUH_MANAGER: "{{ wazuh_manager }}"
+        WAZUH_AGENT_GROUP: "{{ wazuh_agent_group }}"
+        WAZUH_AGENT_NAME: "{{ wazuh_agent_name }}"
+      become: yes
+
+    - name: Clean up downloaded package
+      ansible.builtin.file:
+        path: "/tmp/{{ wazuh_agent_deb }}"
+        state: absent
+
+- name: Enable and start Wazuh agent service
+  ansible.builtin.systemd:
+    name: wazuh-agent
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  become: yes

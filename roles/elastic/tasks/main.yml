@@ -1,0 +1,25 @@
+---
+- name: Require Elastic Fleet configuration
+  ansible.builtin.assert:
+    that:
+      - elastic_fleet_url is defined
+      - elastic_fleet_url | length > 0
+      - token is defined
+      - token | length > 0
+    fail_msg: Set elastic_fleet_url and token in encrypted inventory or group variables.
+  no_log: true
+
+- name: Check if elastic is installed
+  command: elastic-agent version
+  register: elastic_installed
+  changed_when: false
+  ignore_errors: true
+
+- name: Install elastic agent
+  shell: |
+    curl -L -O https://artifacts.elastic.co/downloads/beats/elastic-agent/elastic-agent-8.14.3-linux-x86_64.tar.gz
+    tar xzvf elastic-agent-8.14.3-linux-x86_64.tar.gz
+    cd elastic-agent-8.14.3-linux-x86_64
+    ./elastic-agent install --url="{{ elastic_fleet_url }}" --enrollment-token="{{ token }}" --non-interactive --tag "{{ name_tag }}"
+  when: elastic_installed.rc != 0
+  

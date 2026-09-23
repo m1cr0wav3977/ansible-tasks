@@ -1,0 +1,102 @@
+---
+# Tasks for GlusterFS configuration
+- name: Start and enable GlusterFS service
+  service:
+    name: glusterd
+    state: started
+    enabled: yes
+
+- set_fact:
+    device_path: "{{ device_path | default('/dev/xvdb') }}"
+
+- name: Check if EBS volume is already formatted
+  command: "blkid -o value -s TYPE {{ device_path }}"
+  register: volume_type
+  ignore_errors: yes
+
+- name: if formatted differently
+  command: "blkid -o value -s TYPE {{ device_path }}1"
+  register: volume_type
+  when: volume_type.stdout == ''
+  ignore_errors: yes
+
+- name: debug volume status
+  debug:
+    var: volume_type
+  ignore_errors: yes
+
+- name: Format EBS volume
+  community.general.filesystem:
+    fstype: xfs
+    dev: "{{ device_path }}"
+  when: volume_type.stdout not in ['xfs', 'ext4']
+  ignore_errors: yes
+
+- name: Mount EBS volume
+  ansible.posix.mount:
+    path: /data
+    src: "{{ device_path }}"
+    fstype: xfs
+    state: mounted
+  when: volume_type.stdout not in ['xfs', 'ext4']
+  ignore_errors: yes
+
+- name: Ensure Gluster brick directory exists
+  file:
+    path: "/data/glusterfs/dockervolumes/brick1"
+    state: directory
+    mode: '0775'
+
+- name: Ensure Docker directory exists if directory_name is provided
+  file:
+    path: "/data/docker"
+    state: directory
+    mode: '0775'
+
+- name: Ensure Docker directory exists if directory_name is provided
+  file:
+    path: "/data/docker/{{ directory_name }}"
+    state: directory
+    mode: '0775'
+  when: directory_name is defined
+
+- name: Allow inbound traffic from trusted hosts
+  iptables:
+    table: filter
+    chain: INPUT
+    source: "{{ hostvars[item]['ansible_default_ipv4'].address }}"
+    jump: ACCEPT
+  with_items: "{{ ansible_play_hosts }}"
+  when: inventory_hostname != item
+
+- name: Allow outbound traffic to trusted hosts
+  iptables:
+    table: filter
+    chain: OUTPUT
+    destination: "{{ hostvars[item]['ansible_default_ipv4'].address }}"
+    jump: ACCEPT
+  with_items: "{{ ansible_play_hosts }}"
+  when: inventory_hostname != item
+
+- name: Create Gluster volumes
+  gluster.gluster.gluster_volume:
+    state: present
+    name: docker
+    bricks: /data/glusterfs/dockervolumes/brick1
+    cluster: "{{ ansible_play_hosts | join(',') }}"
+    host: "{{ inventory_hostname }}"
+    replicas: "{{ ansible_play_hosts | length }}"
+    force: yes
+    options:
+      "server.allow-insecure": "on"
+  when: ansible_play_hosts | length > 1
+  run_once: true
+
+- name: Mount GlusterFS volume locally
+  mount:
+    name: /data/docker 
+    src: "{{ (ansible_play_hosts | difference([inventory_hostname])) | join(',') }}:/docker"
+    fstype: glusterfs
+    opts: "defaults,_netdev"
+    state: mounted
+  when: ansible_play_hosts | length > 1 

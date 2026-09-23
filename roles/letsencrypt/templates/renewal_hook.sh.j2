@@ -1,0 +1,8 @@
+#!/bin/bash
+# roles/ssl_certs/templates/renewal_hook.sh.j2
+# Post-renewal hook - managed by Ansible
+# Reloads the web server after certificate renewal
+
+echo "Certificate renewed, reloading services..."
+{{ ssl_renewal_hook_command }}
+echo "Services reloaded at $(date)"

@@ -1,0 +1,19 @@
+---
+- name: Check if metricbeat is installed
+  command: metricbeat version
+  register: metricbeat_installed
+  changed_when: false
+  ignore_errors: true
+
+- name: Debug version check
+  debug:
+    var: metricbeat_installed
+
+- name: template in the metricbeat system conf
+  template:
+    src: system.yml.j2
+    dest: /etc/metricbeat/modules.d/system.yml
+    mode: 0644
+  when: metricbeat_installed.failed or metricbeat_installed.rc != 0
+
+# templating in the metricbeat.yml must be done after the node initializes. Look in graylog.yml

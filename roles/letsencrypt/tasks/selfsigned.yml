@@ -1,0 +1,43 @@
+# Generate self-signed certificates for internal services
+- name: Create certificate directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/ssl/certs
+    - "{{ ssl_private_key_dir }}"
+
+- name: Generate private keys
+  community.crypto.openssl_privatekey:
+    path: "{{ ssl_private_key_dir }}/{{ item.domain }}.key"
+    size: "{{ ssl_selfsigned_key_size }}"
+    owner: root
+    group: root
+    mode: '0600'
+  loop: "{{ ssl_domains }}"
+
+- name: Generate CSRs
+  community.crypto.openssl_csr:
+    path: "/etc/ssl/certs/{{ item.domain }}.csr"
+    privatekey_path: "{{ ssl_private_key_dir }}/{{ item.domain }}.key"
+    common_name: "{{ item.domain }}"
+    country_name: "{{ ssl_selfsigned_country }}"
+    state_or_province_name: "{{ ssl_selfsigned_state }}"
+    organization_name: "{{ ssl_selfsigned_org }}"
+    subject_alt_name: >-
+      {{ ['DNS:' + item.domain] +
+         (item.aliases | default([]) | map('regex_replace', '^', 'DNS:') | list) }}
+  loop: "{{ ssl_domains }}"
+
+- name: Generate self-signed certificates
+  community.crypto.x509_certificate:
+    path: "/etc/ssl/certs/{{ item.domain }}.crt"
+    privatekey_path: "{{ ssl_private_key_dir }}/{{ item.domain }}.key"
+    csr_path: "/etc/ssl/certs/{{ item.domain }}.csr"
+    provider: selfsigned
+    selfsigned_not_after: "+{{ ssl_selfsigned_days }}d"
+  loop: "{{ ssl_domains }}"
+#  notify: reload web server

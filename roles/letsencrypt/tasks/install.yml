@@ -1,0 +1,13 @@
+# Install Certbot and related packages
+- name: Install Certbot packages
+  ansible.builtin.apt:
+    name: "{{ [ssl_certbot_package] + ssl_certbot_plugin_packages }}"
+    state: present
+    update_cache: yes
+  when: ssl_provider == "letsencrypt"
+
+- name: Install OpenSSL for self-signed certificates
+  ansible.builtin.apt:
+    name: openssl
+    state: present
+  when: ssl_provider == "selfsigned"

@@ -1,0 +1,29 @@
+# roles/ssl_certs/tasks/renewal.yml
+# Configure certificate renewal hooks and timers
+- name: Deploy renewal hook script
+  ansible.builtin.template:
+    src: renewal_hook.sh.j2
+    dest: /etc/letsencrypt/renewal-hooks/post/reload-services.sh
+    owner: root
+    group: root
+    mode: '0755'
+  when: ssl_provider == "letsencrypt"
+
+- name: Ensure certbot renewal timer is enabled
+  ansible.builtin.systemd_service:
+    name: certbot.timer
+    state: started
+    enabled: yes
+  when: ssl_provider == "letsencrypt"
+
+- name: Test certificate renewal (dry run)
+  ansible.builtin.command:
+    cmd: certbot renew --dry-run
+  changed_when: false
+  when: ssl_provider == "letsencrypt"
+  register: renewal_test
+
+- name: Report renewal test result
+  ansible.builtin.debug:
+    msg: "Certificate renewal dry-run succeeded"
+  when: ssl_provider == "letsencrypt"

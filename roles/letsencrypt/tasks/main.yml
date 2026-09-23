@@ -1,0 +1,14 @@
+# roles/ssl_certs/tasks/main.yml
+- name: Include installation tasks
+  ansible.builtin.include_tasks: install.yml
+
+- name: Include Let's Encrypt tasks
+  ansible.builtin.include_tasks: letsencrypt.yml
+  when: ssl_provider == "letsencrypt"
+
+- name: Include self-signed certificate tasks
+  ansible.builtin.include_tasks: selfsigned.yml
+  when: ssl_provider == "selfsigned"
+
+- name: Include renewal configuration
+  ansible.builtin.include_tasks: renewal.yml

@@ -1,0 +1,4 @@
+- name: reload web server
+  ansible.builtin.systemd_service:
+    name: "{{ ssl_renewal_service }}"
+    state: reloaded

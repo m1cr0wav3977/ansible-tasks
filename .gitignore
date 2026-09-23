@@ -1,0 +1,20 @@
+# Private Ansible configuration and Vault data
+group_vars/**/vault.yml
+group_vars/**/vault.yaml
+host_vars/**/vault.yml
+host_vars/**/vault.yaml
+*.vault.yml
+*.vault.yaml
+
+# Local environment files and private key material
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Ansible runtime artifacts
+*.retry
+facts/
+artifacts/

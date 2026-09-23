@@ -1,0 +1,12 @@
+---
+- name: Check if a server requires a restart
+  stat:
+    path: /var/run/reboot-required
+  become: yes
+  register: reboot_required
+
+- name: Reboot server if needed
+  reboot:
+    reboot_timeout: 600
+  become: yes
+  when: reboot_required.stat.exists

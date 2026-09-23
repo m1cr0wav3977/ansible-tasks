@@ -1,0 +1,43 @@
+---
+- name: Ensure Docker keyrings dir exists (in case another role runs install later)
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: apt update
+  apt:
+    update_cache: yes
+    upgrade: yes
+  ignore_errors: yes
+
+- name: install apt packages
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - curl
+    - git
+    - aptitude
+    - apt-transport-https
+    - ca-certificates
+    - software-properties-common
+    - unattended-upgrades
+  ignore_errors: yes
+
+- name: Remove dependencies that are no longer required
+  ansible.builtin.apt:
+    autoremove: yes
+
+- name: Check for cloud-init SSH config
+  ansible.builtin.stat:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+  register: cloud_init_ssh_config
+
+- name: Disable PasswordAuthentication in cloud-init SSH config
+  ansible.builtin.replace:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    regexp: '^(\s*)PasswordAuthentication\s+yes\s*$'
+    replace: '\1#PasswordAuthentication yes'
+  when: cloud_init_ssh_config.stat.exists
+  notify: Restart sshd
