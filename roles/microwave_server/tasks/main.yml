@@ -57,6 +57,14 @@
     - { key: AuthenticationMethods, value: 'publickey' }
   notify: Restart sshd
 
+- name: Ensure sshd privilege separation directory exists
+  ansible.builtin.file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
 - name: Validate effective SSH daemon configuration
   ansible.builtin.command: sshd -t
   changed_when: false
