@@ -29,15 +29,34 @@
   ansible.builtin.apt:
     autoremove: yes
 
-- name: Check for cloud-init SSH config
-  ansible.builtin.stat:
-    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
-  register: cloud_init_ssh_config
-
-- name: Disable PasswordAuthentication in cloud-init SSH config
-  ansible.builtin.replace:
-    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
-    regexp: '^(\s*)PasswordAuthentication\s+yes\s*$'
-    replace: '\1#PasswordAuthentication yes'
-  when: cloud_init_ssh_config.stat.exists
+- name: Disable cloud-init SSH password authentication
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-ansible-ssh-pwauth.cfg
+    content: "ssh_pwauth: false\n"
+    owner: root
+    group: root
+    mode: '0644'
   notify: Restart sshd
+
+- name: Remove cloud-init SSH config drop-in
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+    state: absent
+  notify: Restart sshd
+
+- name: Configure public-key-only SSH authentication
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*#?\s*{{ item.key }}\s+'
+    line: '{{ item.key }} {{ item.value }}'
+    insertafter: EOF
+  loop:
+    - { key: PubkeyAuthentication, value: 'yes' }
+    - { key: PasswordAuthentication, value: 'no' }
+    - { key: KbdInteractiveAuthentication, value: 'no' }
+    - { key: AuthenticationMethods, value: 'publickey' }
+  notify: Restart sshd
+
+- name: Validate effective SSH daemon configuration
+  ansible.builtin.command: sshd -t
+  changed_when: false
